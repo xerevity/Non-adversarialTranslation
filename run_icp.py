@@ -46,20 +46,27 @@ if params.tgt_emb is not None:
 else:
     tgt_emb = 'data/wiki.%s.vec' % params.tgt_lang
 
-src_id2word, src_word2id, src_embeddings = utils.read_txt_embeddings(src_emb, params.n_init_ex, False)
+if not os.path.exists(params.cp_dir):
+    os.mkdir(params.cp_dir)
+if not os.path.exists("data"):
+    os.mkdir("data")
+
+_, _, src_embeddings = utils.read_txt_embeddings(src_emb, params.n_init_ex, False)
 np.save('data/%s_%d' % (params.src_lang, params.n_init_ex), src_embeddings)
-tgt_id2word, tgt_word2id, tgt_embeddings = utils.read_txt_embeddings(tgt_emb, params.n_init_ex, False)
+_, _, tgt_embeddings = utils.read_txt_embeddings(tgt_emb, params.n_init_ex, False)
 np.save('data/%s_%d' % (params.tgt_lang, params.n_init_ex), tgt_embeddings)
 
-# src_id2word, src_word2id, src_embeddings = utils.read_txt_embeddings(src_emb, params.n_ft_ex, False)
-# np.save('data/%s_%d' % (params.src_lang, params.n_ft_ex), src_embeddings)
-# tgt_id2word, tgt_word2id, tgt_embeddings = utils.read_txt_embeddings(tgt_emb, params.n_ft_ex, False)
-# np.save('data/%s_%d' % (params.tgt_lang, params.n_ft_ex), tgt_embeddings)
+src_W = src_embeddings.T
+tgt_W = tgt_embeddings.T
+
+src_id2word, src_word2id, src_embeddings = utils.read_txt_embeddings(src_emb, params.n_ft_ex, False)
+np.save('data/%s_%d' % (params.src_lang, params.n_ft_ex), src_embeddings)
+tgt_id2word, tgt_word2id, tgt_embeddings = utils.read_txt_embeddings(tgt_emb, params.n_ft_ex, False)
+np.save('data/%s_%d' % (params.tgt_lang, params.n_ft_ex), tgt_embeddings)
 
 # src_W = np.load("data/%s_%d.npy" % (params.src_lang, params.n_init_ex)).T
 # tgt_W = np.load("data/%s_%d.npy" % (params.tgt_lang, params.n_init_ex)).T
-src_W = src_embeddings.T
-tgt_W = tgt_embeddings.T
+
 
 data = np.zeros((params.n_icp_runs, 2))
 
@@ -69,7 +76,7 @@ best_idx_y = None
 min_rec = 1e8
 
 
-def run_icp(s0, i):
+def run_icp(i, s0=0):
     np.random.seed(s0 + i)
     icp = ICPTrainer(src_W.copy(), tgt_W.copy(), True, params.n_pca)
     t0 = time.time()
@@ -91,7 +98,7 @@ s0 = np.random.randint(50000)
 results = []
 if params.n_processes == 1:
     for i in range(params.n_icp_runs):
-        results += [run_icp(s0, i)]
+        results += [run_icp(i, s0)]
 else:
     pool = multiprocessing.Pool(processes=params.n_processes)
     for result in tqdm.tqdm(pool.imap_unordered(run_icp, range(params.n_icp_runs)), total=params.n_icp_runs):
@@ -127,9 +134,6 @@ print("Reciprocal Pairs - Achieved: Rec %f BB %d" % (rec, bb))
 TX = icp_ft.icp.TX
 TY = icp_ft.icp.TY
 
-if not os.path.exists(params.cp_dir):
-    os.mkdir(params.cp_dir)
-
 # np.save("%s/%s_%s_T" % (params.cp_dir, params.src_lang, params.tgt_lang), TX)
 # np.save("%s/%s_%s_T" % (params.cp_dir, params.tgt_lang, params.src_lang), TY)
 
@@ -141,3 +145,4 @@ TranslatedY = tgt_embeddings.dot(np.transpose(TY))
 
 save_translated(src_id2word, TranslatedX, f"{params.cp_dir}/Translated_{params.src_lang}_{params.tgt_lang}.txt")
 save_translated(tgt_id2word, TranslatedY, f"{params.cp_dir}/Translated_{params.tgt_lang}_{params.src_lang}.txt")
+
